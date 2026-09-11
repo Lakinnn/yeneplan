@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -31,6 +31,9 @@ export const profiles = mysqlTable("profiles", {
   telegramConnectedAt: timestamp("telegramConnectedAt"),
   reminderEnabled: int("reminderEnabled").default(0).notNull(),
   reminderTime: varchar("reminderTime", { length: 5 }).default("08:00").notNull(),
+  energyMode: mysqlEnum("energyMode", ["low", "normal", "locked"]).default("normal").notNull(),
+  communityOptIn: int("communityOptIn").default(0).notNull(),
+  celebrationStyle: mysqlEnum("celebrationStyle", ["calm", "funny", "direct", "quiet"]).default("calm").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -83,6 +86,25 @@ export const coachMessages = mysqlTable("coachMessages", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const communityChallenges = mysqlTable("communityChallenges", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 80 }).notNull().unique(),
+  title: varchar("title", { length: 160 }).notNull(),
+  description: text("description").notNull(),
+  targetDays: int("targetDays").notNull(),
+  accent: varchar("accent", { length: 24 }).default("sun").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const communityMemberships = mysqlTable("communityMemberships", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  challengeId: int("challengeId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({
+  userChallengeUnique: uniqueIndex("userChallengeUnique").on(table.userId, table.challengeId),
+}));
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Profile = typeof profiles.$inferSelect;
@@ -90,3 +112,4 @@ export type Vision = typeof visions.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
 export type CheckIn = typeof checkIns.$inferSelect;
 export type CoachMessage = typeof coachMessages.$inferSelect;
+export type CommunityChallenge = typeof communityChallenges.$inferSelect;

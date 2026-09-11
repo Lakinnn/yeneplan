@@ -2,6 +2,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   checkIns,
+  communityChallenges,
+  communityMemberships,
   coachMessages,
   InsertUser,
   plans,
@@ -174,9 +176,68 @@ export async function createTelegramProgress(chatId: string, note: string, statu
   return { ethiopianDate };
 }
 
+export async function updateTelegramEnergy(chatId: string, energyMode: "low" | "normal" | "locked") {
+  const profile = await getProfileByTelegramChatId(chatId);
+  if (!profile) return null;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.update(profiles).set({ energyMode }).where(eq(profiles.userId, profile.userId));
+  return energyMode;
+}
+
+export async function createTelegramMood(chatId: string, mood: number, note?: string) {
+  const profile = await getProfileByTelegramChatId(chatId);
+  if (!profile) return null;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.insert(checkIns).values({ userId: profile.userId, planId: null, ethiopianDate: `${profile.ethiopianYear}-${profile.currentMonth}-${profile.currentDay}`, mood, note: note || null, status: mood <= 2 ? "rest" : "done" });
+  return profile;
+}
+
 export async function updateTelegramPlan(chatId: string, planId: number, status: "done" | "missed" | "active") {
   const profile = await getProfileByTelegramChatId(chatId);
   if (!profile) return null;
   await updatePlanStatus(profile.userId, planId, status);
   return profile;
+}
+
+export async function moveTelegramTaskTomorrow(chatId: string, planId: number) {
+  const profile = await getProfileByTelegramChatId(chatId);
+  if (!profile) return null;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const nextDay = profile.currentDay >= 30 ? 1 : profile.currentDay + 1;
+  const nextMonth = profile.currentDay >= 30 && profile.currentMonth >= 13 ? 1 : profile.currentDay >= 30 ? profile.currentMonth + 1 : profile.currentMonth;
+  await db.update(plans).set({ ethiopianDay: nextDay, ethiopianMonth: nextMonth, status: "active" }).where(and(eq(plans.id, planId), eq(plans.userId, profile.userId)));
+  return profile;
+}
+
+const starterChallenges = [
+  { slug: "ten-minute-return", title: "10-minute return", description: "Do one useful thing for ten minutes, even on a low-battery day.", targetDays: 7, accent: "leaf" },
+  { slug: "read-a-page", title: "Read a page", description: "Trade infinite scrolling for one page of something that feeds your mind.", targetDays: 14, accent: "sun" },
+  { slug: "show-up-week", title: "Show-up week", description: "Choose one promise and come back to it for seven days. No perfection required.", targetDays: 7, accent: "clay" },
+];
+
+export async function getCommunityData(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const existing = await db.select().from(communityChallenges).orderBy(desc(communityChallenges.createdAt));
+  if (!existing.length) {
+    await db.insert(communityChallenges).values(starterChallenges);
+  }
+  const challenges = await db.select().from(communityChallenges).orderBy(desc(communityChallenges.createdAt));
+  const memberships = await db.select().from(communityMemberships);
+  return challenges.map(challenge => ({ ...challenge, participants: memberships.filter(member => member.challengeId === challenge.id).length, joined: memberships.some(member => member.challengeId === challenge.id && member.userId === userId) }));
+}
+
+export async function joinCommunityChallenge(userId: number, challengeId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.insert(communityMemberships).values({ userId, challengeId }).onDuplicateKeyUpdate({ set: { userId } });
+}
+
+export async function leaveCommunityChallenge(userId: number, challengeId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.delete(communityMemberships).where(and(eq(communityMemberships.userId, userId), eq(communityMemberships.challengeId, challengeId)));
 }

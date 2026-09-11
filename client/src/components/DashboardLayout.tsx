@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useTheme } from "@/contexts/ThemeContext";
-import { CalendarDays, CheckCheck, ClipboardCheck, Compass, Lightbulb, LogOut, Moon, Settings2, Sparkles, Sun } from "lucide-react";
+import { CalendarDays, CheckCheck, ClipboardCheck, Compass, Lightbulb, LogOut, Moon, Settings2, Sparkles, Sun, Users } from "lucide-react";
 import { CSSProperties, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
@@ -16,6 +16,7 @@ const menuItems = [
   { icon: Lightbulb, label: "Vision board", path: "/visions" },
   { icon: CalendarDays, label: "Monthly map", path: "/month" },
   { icon: Sparkles, label: "Coach", path: "/coach" },
+  { icon: Users, label: "Community", path: "/community" },
 ];
 const SIDEBAR_WIDTH_KEY = "yeneplan-sidebar-width";
 

@@ -20,4 +20,9 @@ describe("planner security", () => {
     const caller = appRouter.createCaller(unauthenticatedContext());
     await expect(caller.coach.chat({ message: "Tell me what to do" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
+
+  it("blocks community reads without a signed-in user", async () => {
+    const caller = appRouter.createCaller(unauthenticatedContext());
+    await expect(caller.community.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
 });

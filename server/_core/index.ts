@@ -8,7 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { connectTelegramToken, createTelegramProgress, createTelegramTask, getProfileByTelegramChatId, getReminderRecipients, getTelegramTodayPlans, getUserPlanContext, updateTelegramPlan } from "../db";
+import { connectTelegramToken, createTelegramMood, createTelegramProgress, createTelegramTask, getProfileByTelegramChatId, getReminderRecipients, getTelegramTodayPlans, getUserPlanContext, moveTelegramTaskTomorrow, updateTelegramEnergy, updateTelegramPlan } from "../db";
 import { configureTelegramWebhook, getTelegramWebAppUrl, isValidTelegramWebhook, sendTelegramMessage, telegramCall } from "../telegram";
 import { ENV } from "./env";
 
@@ -34,7 +34,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 const telegramOpenKeyboard = { inline_keyboard: [[{ text: "Open YenePlan", web_app: { url: getTelegramWebAppUrl() } }]] };
 
 function telegramHelpText() {
-  return "YenePlan quick actions\n\n/today — see today’s tasks\n/add Task title — add a task\n/done 1 — complete task #1 from /today\n/missed 1 — mark task #1 missed\n/progress Finished my workout — log a progress note\n\nYou can also tap Done or Missed under /today.";
+  return "YenePlan quick actions\n\n/today — see today’s tasks\n/add Task title — add a task\n/done 1 — complete task #1 from /today\n/missed 1 — mark a task missed\n/later 1 — move task #1 to tomorrow\n/progress Finished my workout — log progress\n/mood 2 — log your battery from 1–5\n/energy low — show one tiny win\n/overwhelmed — enter anti-overwhelm mode\n\nYou can also tap Done or Missed under /today.";
 }
 
 async function sendTelegramQuickReply(chatId: string, text: string, replyMarkup?: Record<string, unknown>) {
@@ -72,6 +72,33 @@ async function handleTelegramCommand(chatId: string, text: string) {
     if (!argument) { await sendTelegramQuickReply(chatId, "Tell me what happened after /progress. Example:\n/progress Finished my workout and felt better"); return; }
     const result = await createTelegramProgress(chatId, argument.slice(0, 2000), "done");
     if (result) await sendTelegramQuickReply(chatId, `Progress logged for ${result.ethiopianDate}.\n\nThat counts. Keep the next promise pleasantly small.`);
+    return;
+  }
+  if (command === "/energy") {
+    const energy = argument.toLowerCase() === "low" ? "low" : argument.toLowerCase() === "locked" ? "locked" : "normal";
+    await updateTelegramEnergy(chatId, energy);
+    await sendTelegramQuickReply(chatId, energy === "low" ? "Low battery mode on. We are not planning a six-hour transformation arc. Try /today and choose one tiny win." : energy === "locked" ? "Locked-in mode on. Your top three are visible now. Focus first, optimize later." : "Normal pace restored. Steady is a real strategy.");
+    return;
+  }
+  if (command === "/overwhelmed") {
+    await updateTelegramEnergy(chatId, "low");
+    await sendTelegramQuickReply(chatId, "You do not need a new life plan right now. Low battery mode is on.\n\nTry this: open the smallest task and do it for ten minutes. Then reply /progress with what happened.");
+    return;
+  }
+  if (command === "/mood") {
+    const mood = Math.max(1, Math.min(5, Number(argument) || 3));
+    await createTelegramMood(chatId, mood);
+    await updateTelegramEnergy(chatId, mood <= 2 ? "low" : mood >= 4 ? "locked" : "normal");
+    await sendTelegramQuickReply(chatId, mood <= 2 ? "Mood logged: low battery. We are switching to minimum viable day mode. One kind action is enough." : mood >= 4 ? "Mood logged: you have some charge. Pick one meaningful move before the dopamine goblins find you." : "Mood logged. A normal day is allowed to be normal.");
+    return;
+  }
+  if (command === "/later") {
+    const { plans: todayPlans } = await getTelegramTodayPlans(chatId);
+    const numeric = Number(argument);
+    const selected = Number.isInteger(numeric) && numeric > 0 && numeric <= todayPlans.length ? todayPlans[numeric - 1] : todayPlans.find(plan => plan.id === numeric);
+    if (!selected) { await sendTelegramQuickReply(chatId, "Use /today first, then /later 1 to move the first task to tomorrow."); return; }
+    await moveTelegramTaskTomorrow(chatId, selected.id);
+    await sendTelegramQuickReply(chatId, `Moved “${selected.title}” to tomorrow. Future you has been notified gently.`);
     return;
   }
   if (command === "/done" || command === "/missed") {
@@ -126,7 +153,7 @@ async function startServer() {
     if (!ENV.appBaseUrl) return res.status(400).json({ ok: false, message: "APP_BASE_URL is not configured" });
     try {
       await configureTelegramWebhook(`${ENV.appBaseUrl.replace(/\/$/, "")}/api/telegram/webhook`);
-      await telegramCall("setMyCommands", { commands: [{ command: "today", description: "See today’s tasks" }, { command: "add", description: "Add a task to today" }, { command: "done", description: "Complete a task" }, { command: "missed", description: "Mark a task missed" }, { command: "progress", description: "Log today’s progress" }, { command: "help", description: "Show quick actions" }] });
+      await telegramCall("setMyCommands", { commands: [{ command: "today", description: "See today’s tasks" }, { command: "add", description: "Add a task to today" }, { command: "done", description: "Complete a task" }, { command: "missed", description: "Mark a task missed" }, { command: "later", description: "Move a task to tomorrow" }, { command: "progress", description: "Log today’s progress" }, { command: "mood", description: "Log your mood" }, { command: "energy", description: "Choose your energy pace" }, { command: "overwhelmed", description: "Get one tiny next step" }, { command: "help", description: "Show quick actions" }] });
       return res.json({ ok: true, webhook: `${ENV.appBaseUrl.replace(/\/$/, "")}/api/telegram/webhook` });
     } catch (error) {
       return res.status(500).json({ ok: false, message: error instanceof Error ? error.message : "Telegram setup failed" });
@@ -142,7 +169,8 @@ async function startServer() {
       const context = await getUserPlanContext(profile.userId);
       const tasks = context.plans.filter(plan => plan.period === "day" && plan.status !== "done").slice(0, 3);
       const body = tasks.length ? tasks.map((task, index) => `${index + 1}. ${task.title}`).join("\n") : "No daily tasks yet — choose one small action before the day gets noisy.";
-      await sendTelegramMessage(profile.telegramChatId, `YenePlan check-in\n\n${body}\n\nReply in the app when you have kept the next promise.`);
+      const buttons = tasks.map(task => [{ text: `✅ Done · ${task.title.slice(0, 28)}`, callback_data: `done:${task.id}` }]);
+      await telegramCall("sendMessage", { chat_id: profile.telegramChatId, text: `YenePlan check-in\n\n${body}\n\nPick one move. Not all three. We are not auditioning for burnout.`, disable_web_page_preview: true, reply_markup: { inline_keyboard: [...buttons, [{ text: "Open today", web_app: { url: getTelegramWebAppUrl() } }]] } });
       sent += 1;
     }
     return res.json({ ok: true, sent });

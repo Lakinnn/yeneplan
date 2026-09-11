@@ -4,7 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
-import { getDb, getDashboardData, getOrCreateProfile, getUserPlanContext, updatePlanStatus, getTelegramLink, disconnectTelegram } from "./db";
+import { getCommunityData, getDb, getDashboardData, getOrCreateProfile, getUserPlanContext, updatePlanStatus, getTelegramLink, disconnectTelegram, joinCommunityChallenge, leaveCommunityChallenge } from "./db";
 import { checkIns, coachMessages, plans, profiles, visions } from "../drizzle/schema";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -25,6 +25,9 @@ const profileInput = z.object({
   theme: z.enum(["light", "dark"]).optional(),
   reminderEnabled: z.number().int().min(0).max(1).optional(),
   reminderTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  energyMode: z.enum(["low", "normal", "locked"]).optional(),
+  communityOptIn: z.number().int().min(0).max(1).optional(),
+  celebrationStyle: z.enum(["calm", "funny", "direct", "quiet"]).optional(),
 });
 
 const periodInput = z.object({
@@ -67,6 +70,11 @@ export const appRouter = router({
     status: protectedProcedure.query(async ({ ctx }) => { const profile = await getOrCreateProfile(ctx.user.id); return { configured: telegramConfigured(), connected: Boolean(profile.telegramChatId), reminderEnabled: Boolean(profile.reminderEnabled), reminderTime: profile.reminderTime }; }),
     autoDetect: protectedProcedure.input(z.object({ initData: z.string().min(1).max(5000) })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); const telegramUser = validateTelegramWebAppData(input.initData); if (!telegramUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Telegram verification failed" }); await getOrCreateProfile(ctx.user.id); await db.update(profiles).set({ telegramChatId: String(telegramUser.id), telegramConnectedAt: new Date(), reminderEnabled: 1 }).where(eq(profiles.userId, ctx.user.id)); return { success: true } as const; }),
     disconnect: protectedProcedure.mutation(async ({ ctx }) => { await disconnectTelegram(ctx.user.id); return { success: true } as const; }),
+  }),
+  community: router({
+    list: protectedProcedure.query(({ ctx }) => getCommunityData(ctx.user.id)),
+    join: protectedProcedure.input(z.object({ challengeId: z.number().int() })).mutation(async ({ ctx, input }) => { const profile = await getOrCreateProfile(ctx.user.id); if (!profile.communityOptIn) throw new TRPCError({ code: "FORBIDDEN", message: "Enable community participation first" }); await joinCommunityChallenge(ctx.user.id, input.challengeId); return { success: true } as const; }),
+    leave: protectedProcedure.input(z.object({ challengeId: z.number().int() })).mutation(async ({ ctx, input }) => { await leaveCommunityChallenge(ctx.user.id, input.challengeId); return { success: true } as const; }),
   }),
   coach: router({
     chat: protectedProcedure.input(z.object({ message: z.string().min(1).max(2000) })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); const context = await getUserPlanContext(ctx.user.id); await db.insert(coachMessages).values({ userId: ctx.user.id, role: "user", content: input.message }); const planDigest = context.plans.map(plan => `${plan.period}:${plan.title} [${plan.status}/${plan.priority}]`).join("; ") || "No plans yet"; const visionDigest = context.visions.map(vision => `${vision.emoji} ${vision.title} (${vision.category})`).join("; ") || "No visions yet"; const checkInDigest = context.checkIns.map(checkIn => `${checkIn.ethiopianDate}:${checkIn.status}`).join("; ") || "No check-ins yet"; const response = await invokeLLM({ messages: [{ role: "system", content: `You are YenePlan Coach, a grounded human-feeling personal growth companion. Be ${context.profile.coachTone}, kind, concise, and practical. Draw inspiration from broadly known self-improvement ideas such as Atomic Habits, Deep Work, Essentialism, and The 7 Habits of Highly Effective People, but do not fabricate quotes or pretend to be the authors. You may share a short attributed quote only when confident; otherwise paraphrase the principle and say it is a principle. Use gentle humor sparingly, never shame, never overuse emojis, and focus on one next action. User focus: ${context.profile.focus || "not set"}. Visions: ${visionDigest}. Plans: ${planDigest}. Recent check-ins: ${checkInDigest}. Keep responses under 120 words.` }, { role: "user", content: input.message }] }); const raw = response.choices?.[0]?.message?.content; const content = typeof raw === "string" ? raw : "Let’s make this smaller: choose one action you can finish in the next 15 minutes."; await db.insert(coachMessages).values({ userId: ctx.user.id, role: "assistant", content }); return { content }; }),

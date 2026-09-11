@@ -30,7 +30,7 @@ The reminder endpoint should be invoked by a Cloudflare Cron Trigger at a cadenc
 
 ## Telegram quick actions
 
-Once a user opens YenePlan from the bot and the account is detected, the bot supports `/today`, `/add Task title`, `/done 1`, `/missed 1`, and `/progress A short note`. `/today` returns the current Ethiopian-year day plan with inline **Done** and **Miss** buttons. The setup endpoint also registers these commands in Telegram’s command menu.
+Once a user opens YenePlan from the bot and the account is detected, the bot supports `/today`, `/add Task title`, `/done 1`, `/missed 1`, `/later 1`, `/progress A short note`, `/mood 2`, `/energy low`, and `/overwhelmed`. `/today` and scheduled reminders return the current Ethiopian-year day plan with inline **Done** buttons. The setup endpoint also registers these commands in Telegram’s command menu. Energy and mood updates are saved to the user’s private profile; community participation remains separately opt-in and exposes only aggregate challenge counts.
 
 ## Cloudflare compatibility note
 
