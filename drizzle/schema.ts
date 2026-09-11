@@ -22,6 +22,12 @@ export const profiles = mysqlTable("profiles", {
   focus: text("focus"),
   timezone: varchar("timezone", { length: 80 }).default("Africa/Addis_Ababa").notNull(),
   coachTone: mysqlEnum("coachTone", ["warm", "direct", "chaotic"]).default("warm").notNull(),
+  theme: mysqlEnum("theme", ["light", "dark"]).default("light").notNull(),
+  telegramChatId: varchar("telegramChatId", { length: 64 }),
+  telegramLinkToken: varchar("telegramLinkToken", { length: 96 }).unique(),
+  telegramConnectedAt: timestamp("telegramConnectedAt"),
+  reminderEnabled: int("reminderEnabled").default(0).notNull(),
+  reminderTime: varchar("reminderTime", { length: 5 }).default("08:00").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -34,6 +40,8 @@ export const visions = mysqlTable("visions", {
   category: varchar("category", { length: 80 }).default("life").notNull(),
   emoji: varchar("emoji", { length: 8 }).default("✦").notNull(),
   color: varchar("color", { length: 24 }).default("sun").notNull(),
+  imageUrl: text("imageUrl"),
+  imageKey: text("imageKey"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

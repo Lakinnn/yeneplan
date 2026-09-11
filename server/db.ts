@@ -10,6 +10,7 @@ import {
   visions,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { nanoid } from "nanoid";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -104,4 +105,35 @@ export async function updatePlanStatus(userId: number, planId: number, status: "
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   await db.update(plans).set({ status, completedAt: status === "done" ? new Date() : null }).where(and(eq(plans.id, planId), eq(plans.userId, userId)));
+}
+
+export async function getTelegramLink(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const profile = await getOrCreateProfile(userId);
+  if (profile.telegramLinkToken) return profile.telegramLinkToken;
+  const token = nanoid(32);
+  await db.update(profiles).set({ telegramLinkToken: token }).where(eq(profiles.userId, userId));
+  return token;
+}
+
+export async function connectTelegramToken(token: string, chatId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const found = await db.select().from(profiles).where(eq(profiles.telegramLinkToken, token)).limit(1);
+  if (!found[0]) return null;
+  await db.update(profiles).set({ telegramChatId: chatId, telegramConnectedAt: new Date(), reminderEnabled: 1 }).where(eq(profiles.id, found[0].id));
+  return found[0].userId;
+}
+
+export async function getReminderRecipients() {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db.select().from(profiles).where(and(eq(profiles.reminderEnabled, 1)));
+}
+
+export async function disconnectTelegram(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.update(profiles).set({ telegramChatId: null, telegramConnectedAt: null, reminderEnabled: 0 }).where(eq(profiles.userId, userId));
 }

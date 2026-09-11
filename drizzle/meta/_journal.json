@@ -15,6 +15,13 @@
       "when": 1789086439918,
       "tag": "0001_faithful_jocasta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1789158619810,
+      "tag": "0002_rare_sharon_ventura",
+      "breakpoints": true
     }
   ]
 }
