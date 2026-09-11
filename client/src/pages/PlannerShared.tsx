@@ -20,7 +20,7 @@ export function usePlannerData() {
 }
 
 export function PageIntro({ eyebrow, title, description, action }: { eyebrow: string; title: ReactNode; description: string; action?: ReactNode }) {
-  return <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-8"><div><p className="text-xs uppercase tracking-[0.18em] text-primary font-semibold">{eyebrow}</p><h1 className="font-display text-4xl md:text-[3.25rem] tracking-[-0.035em] mt-2 leading-[1.05]">{title}</h1><p className="text-muted-foreground mt-3 max-w-2xl leading-relaxed">{description}</p></div>{action}</div>;
+  return <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-8"><div><p className="text-xs uppercase tracking-[0.18em] text-primary font-semibold">{eyebrow}</p><h1 className="font-display text-4xl md:text-[3.25rem] tracking-[-0.035em] mt-2 leading-[1.05]">{title}</h1><p className="text-muted-foreground mt-3 max-w-2xl leading-relaxed">{description}</p></div><div className="flex items-center gap-2 self-start md:self-end"><ThemeToggle />{action}</div></div>;
 }
 
 export function ThemeToggle() {

@@ -53,7 +53,7 @@ export async function configureTelegramWebhook(webhookUrl: string) {
   return telegramCall("setWebhook", {
     url: webhookUrl,
     secret_token: ENV.telegramWebhookSecret || undefined,
-    allowed_updates: ["message"],
+    allowed_updates: ["message", "callback_query"],
   });
 }
 
