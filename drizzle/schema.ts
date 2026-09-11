@@ -20,7 +20,10 @@ export const profiles = mysqlTable("profiles", {
   currentMonth: int("currentMonth").default(1).notNull(),
   currentDay: int("currentDay").default(1).notNull(),
   focus: text("focus"),
+  focusWhy: text("focusWhy"),
+  anchorNextStep: text("anchorNextStep"),
   timezone: varchar("timezone", { length: 80 }).default("Africa/Addis_Ababa").notNull(),
+  weeklyReviewDay: int("weeklyReviewDay").default(6).notNull(),
   coachTone: mysqlEnum("coachTone", ["warm", "direct", "chaotic"]).default("warm").notNull(),
   theme: mysqlEnum("theme", ["light", "dark"]).default("light").notNull(),
   telegramChatId: varchar("telegramChatId", { length: 64 }),
@@ -42,6 +45,7 @@ export const visions = mysqlTable("visions", {
   color: varchar("color", { length: 24 }).default("sun").notNull(),
   imageUrl: text("imageUrl"),
   imageKey: text("imageKey"),
+  visionPlan: text("visionPlan"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

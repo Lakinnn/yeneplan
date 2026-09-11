@@ -9,7 +9,7 @@ import { checkIns, coachMessages, plans, profiles, visions } from "../drizzle/sc
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "./storage";
-import { getTelegramConnectUrl, telegramConfigured } from "./telegram";
+import { telegramConfigured, validateTelegramWebAppData } from "./telegram";
 
 const profileInput = z.object({
   displayName: z.string().max(120).optional().nullable(),
@@ -17,7 +17,10 @@ const profileInput = z.object({
   currentMonth: z.number().int().min(1).max(13).optional(),
   currentDay: z.number().int().min(1).max(30).optional(),
   focus: z.string().max(1000).optional().nullable(),
+  focusWhy: z.string().max(1600).optional().nullable(),
+  anchorNextStep: z.string().max(1000).optional().nullable(),
   timezone: z.string().max(80).optional(),
+  weeklyReviewDay: z.number().int().min(0).max(6).optional(),
   coachTone: z.enum(["warm", "direct", "chaotic"]).optional(),
   theme: z.enum(["light", "dark"]).optional(),
   reminderEnabled: z.number().int().min(0).max(1).optional(),
@@ -34,7 +37,7 @@ const periodInput = z.object({
   priority: z.enum(["low", "medium", "high"]).default("medium"),
 });
 
-const visionInput = z.object({ title: z.string().min(1).max(180), reason: z.string().max(1000).optional().nullable(), category: z.string().max(80).default("life"), emoji: z.string().max(8).default("✦"), color: z.string().max(24).default("sun"), imageUrl: z.string().max(500).optional().nullable(), imageKey: z.string().max(500).optional().nullable() });
+const visionInput = z.object({ title: z.string().min(1).max(180), reason: z.string().max(3000).optional().nullable(), category: z.string().max(80).default("life"), emoji: z.string().max(8).default("✦"), color: z.string().max(24).default("sun"), imageUrl: z.string().max(500).optional().nullable(), imageKey: z.string().max(500).optional().nullable(), visionPlan: z.string().max(3000).optional().nullable() });
 
 export const appRouter = router({
   system: systemRouter,
@@ -49,17 +52,20 @@ export const appRouter = router({
   }),
   vision: router({
     create: protectedProcedure.input(visionInput).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); await db.insert(visions).values({ userId: ctx.user.id, ...input }); return { success: true } as const; }),
+    update: protectedProcedure.input(visionInput.extend({ id: z.number().int() })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); const { id, ...values } = input; await db.update(visions).set(values).where(and(eq(visions.id, id), eq(visions.userId, ctx.user.id))); return { success: true } as const; }),
     upload: protectedProcedure.input(z.object({ fileName: z.string().regex(/^[a-zA-Z0-9._-]+$/).max(120), contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]), dataBase64: z.string().max(8_000_000) })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); const raw = input.dataBase64.replace(/^data:[^;]+;base64,/, ""); const bytes = Buffer.from(raw, "base64"); if (bytes.length > 6 * 1024 * 1024) throw new TRPCError({ code: "BAD_REQUEST", message: "Images must be 6MB or smaller" }); const uploaded = await storagePut(`${ctx.user.id}-visions/${input.fileName}`, bytes, input.contentType); return uploaded; }),
     delete: protectedProcedure.input(z.object({ id: z.number().int() })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); await db.delete(visions).where(and(eq(visions.id, input.id), eq(visions.userId, ctx.user.id))); return { success: true } as const; }),
   }),
   plan: router({
     create: protectedProcedure.input(periodInput).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); await db.insert(plans).values({ userId: ctx.user.id, ...input, status: input.period === "day" ? "active" : "backlog" }); return { success: true } as const; }),
+    update: protectedProcedure.input(periodInput.extend({ id: z.number().int() })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); const { id, ...values } = input; await db.update(plans).set(values).where(and(eq(plans.id, id), eq(plans.userId, ctx.user.id))); return { success: true } as const; }),
     status: protectedProcedure.input(z.object({ id: z.number().int(), status: z.enum(["backlog", "active", "done", "missed"]) })).mutation(async ({ ctx, input }) => { await updatePlanStatus(ctx.user.id, input.id, input.status); return { success: true } as const; }),
     delete: protectedProcedure.input(z.object({ id: z.number().int() })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); await db.delete(plans).where(and(eq(plans.id, input.id), eq(plans.userId, ctx.user.id))); return { success: true } as const; }),
   }),
   checkIn: router({ create: protectedProcedure.input(z.object({ planId: z.number().int().optional().nullable(), ethiopianDate: z.string().max(32), mood: z.number().int().min(1).max(5).optional().nullable(), note: z.string().max(1200).optional().nullable(), status: z.enum(["done", "missed", "rest"]) })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); await db.insert(checkIns).values({ userId: ctx.user.id, ...input }); if (input.planId && input.status === "done") await updatePlanStatus(ctx.user.id, input.planId, "done"); return { success: true } as const; }) }),
   telegram: router({
-    status: protectedProcedure.query(async ({ ctx }) => { const profile = await getOrCreateProfile(ctx.user.id); return { configured: telegramConfigured(), connected: Boolean(profile.telegramChatId), reminderEnabled: Boolean(profile.reminderEnabled), reminderTime: profile.reminderTime, connectUrl: telegramConfigured() ? getTelegramConnectUrl(await getTelegramLink(ctx.user.id)) : null }; }),
+    status: protectedProcedure.query(async ({ ctx }) => { const profile = await getOrCreateProfile(ctx.user.id); return { configured: telegramConfigured(), connected: Boolean(profile.telegramChatId), reminderEnabled: Boolean(profile.reminderEnabled), reminderTime: profile.reminderTime }; }),
+    autoDetect: protectedProcedure.input(z.object({ initData: z.string().min(1).max(5000) })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database is not available" }); const telegramUser = validateTelegramWebAppData(input.initData); if (!telegramUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Telegram verification failed" }); await getOrCreateProfile(ctx.user.id); await db.update(profiles).set({ telegramChatId: String(telegramUser.id), telegramConnectedAt: new Date(), reminderEnabled: 1 }).where(eq(profiles.userId, ctx.user.id)); return { success: true } as const; }),
     disconnect: protectedProcedure.mutation(async ({ ctx }) => { await disconnectTelegram(ctx.user.id); return { success: true } as const; }),
   }),
   coach: router({

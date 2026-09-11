@@ -9,7 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { connectTelegramToken, getReminderRecipients, getUserPlanContext } from "../db";
-import { configureTelegramWebhook, isValidTelegramWebhook, sendTelegramMessage } from "../telegram";
+import { configureTelegramWebhook, getTelegramWebAppUrl, isValidTelegramWebhook, sendTelegramMessage, telegramCall } from "../telegram";
 import { ENV } from "./env";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -47,8 +47,8 @@ async function startServer() {
     if (chatId && text.startsWith("/start")) {
       const token = text.split(/\s+/, 2)[1];
       const linked = token ? await connectTelegramToken(token, String(chatId)) : null;
-      if (linked) await sendTelegramMessage(String(chatId), "Your YenePlan reminders are connected. You are in charge of the plan; I am only here to nudge the next step. Use /help for options.");
-      else await sendTelegramMessage(String(chatId), "Welcome to YenePlan. Open the connection link from your private Settings page to connect this chat safely.");
+      if (linked) await sendTelegramMessage(String(chatId), "Your YenePlan reminders are connected. You are in charge of the plan; I am only here to nudge the next step. Open YenePlan below to manage your plan.");
+      else await telegramCall("sendMessage", { chat_id: String(chatId), text: "Welcome to YenePlan. Open the planner below and your Telegram account will be detected automatically — no copy-paste connection code.", reply_markup: { inline_keyboard: [[{ text: "Open YenePlan", web_app: { url: getTelegramWebAppUrl() } }]] } });
     } else if (chatId && text === "/help") {
       await sendTelegramMessage(String(chatId), "YenePlan can remind you about today’s plan and help you keep a gentle promise. Manage consent and reminder time in Settings.");
     }

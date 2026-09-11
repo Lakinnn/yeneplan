@@ -4,8 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Source Serif 4", Georgia, serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -72,7 +72,7 @@
   --radius: 0.9rem;
 }
 
-.dark { --background: #211f1a; --foreground: #f7f1e6; --card: #2b2923; --card-foreground: #f7f1e6; --popover: #2b2923; --popover-foreground: #f7f1e6; --muted: #363229; --muted-foreground: #b7a998; --border: #443f35; --input: #443f35; --accent: #304b3d; --accent-foreground: #d9f0df; }
+.dark { --background: #181a18; --foreground: #f1f3ed; --card: #232723; --card-foreground: #f1f3ed; --popover: #232723; --popover-foreground: #f1f3ed; --muted: #303630; --muted-foreground: #b7c1b7; --border: #414a41; --input: #414a41; --accent: #294a39; --accent-foreground: #e3f3e7; --secondary: #303731; --secondary-foreground: #e4ebe4; --primary: #e18a36; --primary-foreground: #21180d; --ring: #e18a36; }
 
 @layer base {
   * { @apply border-border outline-ring/50; }
@@ -90,6 +90,12 @@
   .font-display { font-family: var(--font-display); }
   .brand-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 12px; background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); box-shadow: 0 7px 20px rgba(243,165,60,.18); transition: transform 160ms ease-out; }
   .brand-mark:active { transform: scale(.96); }
+  .bg-ink { background: #292b27; }
+  .text-ink-foreground { color: #f4f2e9; }
+  .text-ink-muted { color: #c4c9bd; }
+  .dark .bg-ink { background: #0f1210; }
+  .dark .text-ink-foreground { color: #f4f7f1; }
+  .dark .text-ink-muted { color: #c7d1c6; }
   .paper-grid { background-image: linear-gradient(rgba(198,106,37,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(198,106,37,.055) 1px, transparent 1px); background-size: 28px 28px; }
   .sun-wash { background: radial-gradient(circle at 80% 20%, rgba(244,180,79,.2), transparent 32%), radial-gradient(circle at 10% 85%, rgba(43,110,73,.12), transparent 30%); }
   .lift { transition: transform 180ms cubic-bezier(.23,1,.32,1), box-shadow 180ms ease; }
