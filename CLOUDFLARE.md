@@ -28,6 +28,10 @@ curl -X POST https://your-public-domain.example/api/telegram/setup \
 
 The reminder endpoint should be invoked by a Cloudflare Cron Trigger at a cadence appropriate to the product, then filter recipients by their saved reminder time and timezone before sending. Telegram’s webhook secret header is validated by the app, and Telegram Web App `initData` is verified server-side with an HMAC check and freshness limit.
 
+## Telegram quick actions
+
+Once a user opens YenePlan from the bot and the account is detected, the bot supports `/today`, `/add Task title`, `/done 1`, `/missed 1`, and `/progress A short note`. `/today` returns the current Ethiopian-year day plan with inline **Done** and **Miss** buttons. The setup endpoint also registers these commands in Telegram’s command menu.
+
 ## Cloudflare compatibility note
 
 The current full-stack project uses the WebDev Node/Express runtime, Manus OAuth context, Drizzle/MySQL, and the platform storage helper. The product logic and endpoint contracts are portable, but the runtime should not be copied to Workers unchanged. For a direct Workers deployment, move the API handlers to a Worker-compatible router, use D1/Hyperdrive or another Workers-compatible database binding, use R2 for vision images, and expose the same tRPC contracts or a Worker RPC layer. Keep the browser page layer on Cloudflare Pages or the Worker’s static assets. Do not put Telegram, database, storage, or AI credentials in client-side variables.

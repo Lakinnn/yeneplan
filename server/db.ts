@@ -137,3 +137,46 @@ export async function disconnectTelegram(userId: number) {
   if (!db) throw new Error("Database is not available");
   await db.update(profiles).set({ telegramChatId: null, telegramConnectedAt: null, reminderEnabled: 0 }).where(eq(profiles.userId, userId));
 }
+
+export async function getProfileByTelegramChatId(chatId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const result = await db.select().from(profiles).where(eq(profiles.telegramChatId, chatId)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function getTelegramTodayPlans(chatId: string) {
+  const profile = await getProfileByTelegramChatId(chatId);
+  if (!profile) return { profile: null, plans: [] };
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const todayPlans = await db.select().from(plans).where(and(eq(plans.userId, profile.userId), eq(plans.period, "day"), eq(plans.ethiopianYear, profile.ethiopianYear), eq(plans.ethiopianMonth, profile.currentMonth), eq(plans.ethiopianDay, profile.currentDay))).orderBy(desc(plans.createdAt)).limit(20);
+  return { profile, plans: todayPlans };
+}
+
+export async function createTelegramTask(chatId: string, title: string, priority: "low" | "medium" | "high" = "medium") {
+  const profile = await getProfileByTelegramChatId(chatId);
+  if (!profile) return null;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.insert(plans).values({ userId: profile.userId, period: "day", ethiopianYear: profile.ethiopianYear, ethiopianMonth: profile.currentMonth, ethiopianDay: profile.currentDay, title, detail: null, priority, status: "active" });
+  const created = await db.select().from(plans).where(and(eq(plans.userId, profile.userId), eq(plans.period, "day"))).orderBy(desc(plans.createdAt)).limit(1);
+  return created[0] ?? null;
+}
+
+export async function createTelegramProgress(chatId: string, note: string, status: "done" | "missed" | "rest" = "done") {
+  const profile = await getProfileByTelegramChatId(chatId);
+  if (!profile) return null;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const ethiopianDate = `${profile.ethiopianYear}-${profile.currentMonth}-${profile.currentDay}`;
+  await db.insert(checkIns).values({ userId: profile.userId, planId: null, ethiopianDate, mood: null, note, status });
+  return { ethiopianDate };
+}
+
+export async function updateTelegramPlan(chatId: string, planId: number, status: "done" | "missed" | "active") {
+  const profile = await getProfileByTelegramChatId(chatId);
+  if (!profile) return null;
+  await updatePlanStatus(profile.userId, planId, status);
+  return profile;
+}

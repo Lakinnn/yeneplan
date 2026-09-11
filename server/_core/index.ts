@@ -8,7 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { connectTelegramToken, getReminderRecipients, getUserPlanContext } from "../db";
+import { connectTelegramToken, createTelegramProgress, createTelegramTask, getProfileByTelegramChatId, getReminderRecipients, getTelegramTodayPlans, getUserPlanContext, updateTelegramPlan } from "../db";
 import { configureTelegramWebhook, getTelegramWebAppUrl, isValidTelegramWebhook, sendTelegramMessage, telegramCall } from "../telegram";
 import { ENV } from "./env";
 
@@ -31,6 +31,62 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+const telegramOpenKeyboard = { inline_keyboard: [[{ text: "Open YenePlan", web_app: { url: getTelegramWebAppUrl() } }]] };
+
+function telegramHelpText() {
+  return "YenePlan quick actions\n\n/today — see today’s tasks\n/add Task title — add a task\n/done 1 — complete task #1 from /today\n/missed 1 — mark task #1 missed\n/progress Finished my workout — log a progress note\n\nYou can also tap Done or Missed under /today.";
+}
+
+async function sendTelegramQuickReply(chatId: string, text: string, replyMarkup?: Record<string, unknown>) {
+  return telegramCall("sendMessage", { chat_id: chatId, text, disable_web_page_preview: true, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+}
+
+async function handleTelegramCommand(chatId: string, text: string) {
+  const [rawCommand, ...parts] = text.trim().split(/\s+/);
+  const command = (rawCommand || "").split("@")[0].toLowerCase();
+  const argument = parts.join(" ").trim();
+  const linked = await getProfileByTelegramChatId(chatId);
+  if (!linked && command !== "/start") {
+    await sendTelegramQuickReply(chatId, "Open YenePlan once to connect this Telegram account securely. After that, you can manage tasks here without copy-pasting a code.", telegramOpenKeyboard);
+    return;
+  }
+  if (command === "/help") {
+    await sendTelegramQuickReply(chatId, telegramHelpText());
+    return;
+  }
+  if (command === "/today") {
+    const { profile, plans: todayPlans } = await getTelegramTodayPlans(chatId);
+    if (!profile) return;
+    const body = todayPlans.length ? todayPlans.map((plan, index) => `${index + 1}. ${plan.status === "done" ? "✅" : plan.status === "missed" ? "⚠️" : "▫️"} ${plan.title} [${plan.priority}]`).join("\n") : "No tasks yet. Add one small promise with /add Your task";
+    const buttons = todayPlans.filter(plan => plan.status !== "done").slice(0, 8).map((plan, index) => [{ text: `✅ Done ${index + 1}`, callback_data: `done:${plan.id}` }, { text: `Miss ${index + 1}`, callback_data: `miss:${plan.id}` }]);
+    await sendTelegramQuickReply(chatId, `Today · ${profile.ethiopianYear}-${profile.currentMonth}-${profile.currentDay}\n\n${body}`, buttons.length ? { inline_keyboard: buttons } : undefined);
+    return;
+  }
+  if (command === "/add" || command === "/task") {
+    if (!argument) { await sendTelegramQuickReply(chatId, "Tell me the task after the command. Example:\n/add Read 5 pages"); return; }
+    const task = await createTelegramTask(chatId, argument.slice(0, 180));
+    if (task) await sendTelegramQuickReply(chatId, `Added to today: “${task.title}”\n\nSmall enough to start? Good. Reply /done ${task.id} when it’s complete.`);
+    return;
+  }
+  if (command === "/progress" || command === "/log") {
+    if (!argument) { await sendTelegramQuickReply(chatId, "Tell me what happened after /progress. Example:\n/progress Finished my workout and felt better"); return; }
+    const result = await createTelegramProgress(chatId, argument.slice(0, 2000), "done");
+    if (result) await sendTelegramQuickReply(chatId, `Progress logged for ${result.ethiopianDate}.\n\nThat counts. Keep the next promise pleasantly small.`);
+    return;
+  }
+  if (command === "/done" || command === "/missed") {
+    const { plans: todayPlans } = await getTelegramTodayPlans(chatId);
+    const numeric = Number(argument);
+    const selected = Number.isInteger(numeric) && numeric > 0 && numeric <= todayPlans.length ? todayPlans[numeric - 1] : todayPlans.find(plan => plan.id === numeric);
+    if (!selected) { await sendTelegramQuickReply(chatId, "I couldn’t find that task in today’s list. Use /today first, then reply /done 1 or /missed 1."); return; }
+    const status = command === "/done" ? "done" : "missed";
+    await updateTelegramPlan(chatId, selected.id, status);
+    await sendTelegramQuickReply(chatId, status === "done" ? `Done: “${selected.title}” ✅\n\nOne brick placed. That’s how the wall gets built.` : `Marked missed: “${selected.title}”.\n\nNo drama. Adjust the next move and continue.`);
+    return;
+  }
+  if (command !== "/start") await sendTelegramQuickReply(chatId, telegramHelpText());
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -41,16 +97,26 @@ async function startServer() {
   registerOAuthRoutes(app);
   app.post("/api/telegram/webhook", async (req, res) => {
     if (!isValidTelegramWebhook(new Request("http://localhost", { headers: req.headers as Record<string, string> }))) return res.status(401).json({ ok: false });
-    const update = req.body as { message?: { chat?: { id?: number | string }; text?: string; from?: { first_name?: string } } };
-    const chatId = update.message?.chat?.id;
+    const update = req.body as { message?: { chat?: { id?: number | string }; text?: string }; callback_query?: { id?: string; data?: string; message?: { chat?: { id?: number | string } } } };
+    const messageChatId = update.message?.chat?.id;
+    const callbackChatId = update.callback_query?.message?.chat?.id;
+    const chatId = messageChatId ?? callbackChatId;
     const text = update.message?.text?.trim() || "";
     if (chatId && text.startsWith("/start")) {
       const token = text.split(/\s+/, 2)[1];
       const linked = token ? await connectTelegramToken(token, String(chatId)) : null;
-      if (linked) await sendTelegramMessage(String(chatId), "Your YenePlan reminders are connected. You are in charge of the plan; I am only here to nudge the next step. Open YenePlan below to manage your plan.");
-      else await telegramCall("sendMessage", { chat_id: String(chatId), text: "Welcome to YenePlan. Open the planner below and your Telegram account will be detected automatically — no copy-paste connection code.", reply_markup: { inline_keyboard: [[{ text: "Open YenePlan", web_app: { url: getTelegramWebAppUrl() } }]] } });
-    } else if (chatId && text === "/help") {
-      await sendTelegramMessage(String(chatId), "YenePlan can remind you about today’s plan and help you keep a gentle promise. Manage consent and reminder time in Settings.");
+      if (linked) await sendTelegramQuickReply(String(chatId), "Your YenePlan reminders are connected. Try /today to see your tasks, or /help for quick actions.", telegramOpenKeyboard);
+      else await sendTelegramQuickReply(String(chatId), "Welcome to YenePlan. Open the planner below and your Telegram account will be detected automatically — no copy-paste connection code. After connecting, try /today or /add Your task.", telegramOpenKeyboard);
+    } else if (chatId && text.startsWith("/")) {
+      await handleTelegramCommand(String(chatId), text);
+    } else if (chatId && update.callback_query?.data) {
+      const [action, rawId] = update.callback_query.data.split(":");
+      if (update.callback_query.id) await telegramCall("answerCallbackQuery", { callback_query_id: update.callback_query.id, text: action === "done" ? "Marked done" : "Marked missed" });
+      const planId = Number(rawId);
+      if (Number.isInteger(planId) && (action === "done" || action === "miss")) {
+        const linked = await updateTelegramPlan(String(chatId), planId, action === "done" ? "done" : "missed");
+        if (linked) await sendTelegramQuickReply(String(chatId), action === "done" ? "Task complete ✅ Keep the momentum gentle." : "Marked missed. Reset without the guilt; choose the next move.");
+      }
     }
     return res.json({ ok: true });
   });
@@ -60,6 +126,7 @@ async function startServer() {
     if (!ENV.appBaseUrl) return res.status(400).json({ ok: false, message: "APP_BASE_URL is not configured" });
     try {
       await configureTelegramWebhook(`${ENV.appBaseUrl.replace(/\/$/, "")}/api/telegram/webhook`);
+      await telegramCall("setMyCommands", { commands: [{ command: "today", description: "See today’s tasks" }, { command: "add", description: "Add a task to today" }, { command: "done", description: "Complete a task" }, { command: "missed", description: "Mark a task missed" }, { command: "progress", description: "Log today’s progress" }, { command: "help", description: "Show quick actions" }] });
       return res.json({ ok: true, webhook: `${ENV.appBaseUrl.replace(/\/$/, "")}/api/telegram/webhook` });
     } catch (error) {
       return res.status(500).json({ ok: false, message: error instanceof Error ? error.message : "Telegram setup failed" });
