@@ -26,6 +26,7 @@ const profileInput = z.object({
   reminderEnabled: z.number().int().min(0).max(1).optional(),
   reminderTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
   energyMode: z.enum(["low", "normal", "locked"]).optional(),
+  vibeLevel: z.number().int().min(0).max(100).optional(),
   communityOptIn: z.number().int().min(0).max(1).optional(),
   celebrationStyle: z.enum(["calm", "funny", "direct", "quiet"]).optional(),
 });

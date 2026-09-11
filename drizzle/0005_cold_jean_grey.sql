@@ -1,0 +1,1 @@
+ALTER TABLE `profiles` ADD `vibeLevel` int DEFAULT 50 NOT NULL;

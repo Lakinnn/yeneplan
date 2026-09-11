@@ -105,6 +105,22 @@
   .check-dot.done { background: #4b9465; box-shadow: 0 0 0 4px rgba(75,148,101,.12); }
   .check-dot.missed { background: #c65c48; }
   .check-dot.today { background: #e99a39; box-shadow: 0 0 0 4px rgba(233,154,57,.16); }
+  .vibe-shell { min-height: 100%; transition: background 220ms ease; }
+  .vibe-calm { background: radial-gradient(circle at 90% 4%, rgba(126, 190, 214, .16), transparent 26%), var(--background); }
+  .vibe-main { background: radial-gradient(circle at 90% 4%, rgba(245, 185, 86, .2), transparent 26%), radial-gradient(circle at 4% 44%, rgba(116, 190, 151, .1), transparent 22%), var(--background); }
+  .vibe-chaos { background: radial-gradient(circle at 90% 4%, rgba(240, 129, 180, .18), transparent 25%), radial-gradient(circle at 4% 44%, rgba(112, 165, 242, .15), transparent 24%), radial-gradient(circle at 80% 90%, rgba(245, 188, 83, .16), transparent 26%), var(--background); }
+  .dark .vibe-calm, .dark .vibe-main, .dark .vibe-chaos { background-color: var(--background); }
+  .fun-strip { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 1.1rem; border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent); border-radius: 1.25rem; background: linear-gradient(100deg, color-mix(in srgb, #a9d9e8 22%, var(--card)), color-mix(in srgb, #ffd38a 20%, var(--card)), color-mix(in srgb, #f2b7d8 18%, var(--card))); }
+  .dark .fun-strip { background: linear-gradient(100deg, rgba(23, 62, 76, .65), rgba(82, 59, 25, .58), rgba(76, 35, 67, .55)); }
+  .quest-card { color: #302318; background: linear-gradient(135deg, #ffd77d, #ffb68a 50%, #efa8d1); box-shadow: 0 14px 30px rgba(208, 112, 82, .14); }
+  .dark .quest-card { color: #20180e; background: linear-gradient(135deg, #eeb858, #db876d 50%, #d28ab7); }
+  .quest-spin { width: 2.75rem; height: 2.75rem; border-radius: 999px; display: grid; place-items: center; font-size: 1.5rem; background: rgba(255,255,255,.38); transition: transform 180ms cubic-bezier(.23,1,.32,1), background 180ms ease; }
+  .quest-spin:hover { transform: rotate(22deg) scale(1.06); background: rgba(255,255,255,.64); }
+  .quest-spin:active { transform: rotate(130deg) scale(.94); }
+  .vibe-slider { height: .55rem; appearance: none; border-radius: 999px; background: linear-gradient(90deg, #8ec9e0, #f1bd64 52%, #ee8eba); outline: none; }
+  .vibe-slider::-webkit-slider-thumb { appearance: none; width: 1.35rem; height: 1.35rem; border-radius: 50%; border: 3px solid var(--card); background: var(--primary); box-shadow: 0 3px 10px rgba(0,0,0,.18); }
+  .vibe-slider::-moz-range-thumb { width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 3px solid var(--card); background: var(--primary); box-shadow: 0 3px 10px rgba(0,0,0,.18); }
+  @media (prefers-reduced-motion: no-preference) { .quest-card { animation: joy-float 5s ease-in-out infinite; } @keyframes joy-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } } }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }

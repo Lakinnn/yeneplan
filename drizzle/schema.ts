@@ -32,6 +32,7 @@ export const profiles = mysqlTable("profiles", {
   reminderEnabled: int("reminderEnabled").default(0).notNull(),
   reminderTime: varchar("reminderTime", { length: 5 }).default("08:00").notNull(),
   energyMode: mysqlEnum("energyMode", ["low", "normal", "locked"]).default("normal").notNull(),
+  vibeLevel: int("vibeLevel").default(50).notNull(),
   communityOptIn: int("communityOptIn").default(0).notNull(),
   celebrationStyle: mysqlEnum("celebrationStyle", ["calm", "funny", "direct", "quiet"]).default("calm").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
